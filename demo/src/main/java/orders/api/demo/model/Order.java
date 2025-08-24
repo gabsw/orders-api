@@ -18,5 +18,4 @@ public class Order {
     private int quantity;
     private double price;
     private Instant createdAt = Instant.now();
-    private Instant updatedAt = Instant.now();
 }
