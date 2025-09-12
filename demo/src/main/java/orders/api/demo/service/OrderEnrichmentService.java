@@ -56,9 +56,13 @@ import java.util.concurrent.StructuredTaskScope;
 @RequiredArgsConstructor
 public class OrderEnrichmentService {
 
-    private final OrderRepository repo;    // Spring Data JPA repository (blocking calls)
-    private final HttpClient http;         // java.net.http client (blocking API, Loom-friendly)
-    private final ObjectMapper mapper = new ObjectMapper(); // JSON parsing
+    private final OrderRepository repo;
+    private final HttpClient http;
+    private final ObjectMapper mapper = new ObjectMapper();
+
+    private static String ts() {
+        return java.time.LocalTime.now().toString();
+    }
 
     /**
      * createEnriched(OrderCreate)
@@ -81,7 +85,7 @@ public class OrderEnrichmentService {
     public OrderEnriched createEnriched(OrderCreate req) throws Exception {
         // For demo: show whether we’re on a virtual thread
         Thread t = Thread.currentThread();
-        System.out.printf("POST /orders/enrich served by %s (virtual=%s)%n", t, t.isVirtual());
+        System.out.printf("[%s] POST /orders/enrich served by %s (virtual=%s)%n", ts(), t, t.isVirtual());
 
         // Structured concurrency scope: cancels siblings when one fails.
         try (var scope = new StructuredTaskScope.ShutdownOnFailure()) {
@@ -90,17 +94,36 @@ public class OrderEnrichmentService {
             // Under the hood: a VIRTUAL THREAD runs this; when JDBC blocks on I/O,
             // the virtual thread is parked and the carrier OS thread is released.
             StructuredTaskScope.Subtask<Void> validateTask = scope.fork(() -> {
-                validate(req);
-                return null;
+                System.out.printf("[%s] validate() START on %s%n", ts(), Thread.currentThread());
+                long startNanos = System.nanoTime();
+                try {
+                    validate(req);
+                    return null;
+                } finally {
+                    long durMs = (System.nanoTime() - startNanos) / 1_000_000;
+                    System.out.printf("[%s] validate() END   (+%d ms) on %s%n", ts(), durMs, Thread.currentThread());
+                }
             });
 
             // Subtask 2: External HTTP price fetch (blocking).
             // Also on a VIRTUAL THREAD; when waiting on the socket, it parks.
-            StructuredTaskScope.Subtask<BigDecimal> priceTask = scope.fork(() -> fetchPrice(req.ticker()));
+            StructuredTaskScope.Subtask<BigDecimal> priceTask = scope.fork(() -> {
+                System.out.printf("[%s] fetchPrice() START on %s%n", ts(), Thread.currentThread());
+                long startNanos = System.nanoTime();
+                try {
+                    return fetchPrice(req.ticker());
+                } finally {
+                    long durMs = (System.nanoTime() - startNanos) / 1_000_000;
+                    System.out.printf("[%s] fetchPrice() END   (+%d ms) on %s%n", ts(), durMs, Thread.currentThread());
+                }
+            });
 
+            // Mostrar no log quando o controlador entra/sai do join()
+            System.out.printf("[%s] join() waiting... on %s%n", ts(), Thread.currentThread());
             // Wait for both subtasks to complete (success/failure).
             // This blocks the current (likely virtual) thread; parking is efficient here too.
             scope.join();
+            System.out.printf("[%s] join() done       on %s%n", ts(), Thread.currentThread());
 
             // If any subtask failed, rethrow the exception (first one).
             // ShutdownOnFailure cancels the other subtask automatically.
