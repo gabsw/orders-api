@@ -1,7 +1,10 @@
 package orders.api.demo.controller;
 
 import lombok.RequiredArgsConstructor;
+import orders.api.demo.dto.OrderCreate;
+import orders.api.demo.dto.OrderEnriched;
 import orders.api.demo.model.Order;
+import orders.api.demo.service.OrderEnrichmentService;
 import orders.api.demo.service.OrderService;
 import org.springframework.web.bind.annotation.*;
 
@@ -14,6 +17,7 @@ import java.util.UUID;
 public class OrderController {
 
     private final OrderService service;
+    private final OrderEnrichmentService enrichmentService;
 
     @GetMapping
     public List<Order> listOrders() {
@@ -32,6 +36,13 @@ public class OrderController {
         Thread t = Thread.currentThread();
         System.out.printf("POST /orders served by %s (virtual=%s)%n", t, t.isVirtual());
         return service.createOrder(order);
+    }
+
+    @PostMapping("/enrich")
+    public OrderEnriched createEnrichedOrder(@RequestBody OrderCreate req) throws Exception {
+        Thread t = Thread.currentThread();
+        System.out.printf("POST /orders/enrich served by %s (virtual=%s)%n", t, t.isVirtual());
+        return enrichmentService.createEnriched(req);
     }
 }
 
