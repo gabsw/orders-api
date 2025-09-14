@@ -1,4 +1,4 @@
-package demo.virtualthreads;
+package orders.api.demo.runner;
 
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.stereotype.Component;
