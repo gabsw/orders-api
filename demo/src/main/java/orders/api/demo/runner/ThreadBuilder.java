@@ -7,7 +7,7 @@ import org.springframework.beans.factory.annotation.Value;
 import java.util.concurrent.ThreadLocalRandom;
 
 @Component
-public class ThreadDemo implements CommandLineRunner {
+public class ThreadBuilder implements CommandLineRunner {
 
     @Value("${demo.threadType:platform}")
     private String threadType;
